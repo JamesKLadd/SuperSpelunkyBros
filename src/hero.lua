@@ -71,6 +71,7 @@ local blocked_frames = 0
 local jump_hook_tick = -1
 local walk_phase = 0.0
 local hooks_installed = {}
+local last_vy = 0.0     -- vertical speed after the previous frame, to restore
 
 --- Read-only snapshot for the debug overlay.
 Hero.debug = {}
@@ -176,6 +177,62 @@ local function on_animate(self)
     end
 end
 
+-- ---------------------------------------------------------- no ledge grabs
+--
+-- The engine grabs a ledge even with no direction held, so hiding the stick does
+-- not prevent it (seen in game at the 5-high ledge). The grab is a state of the
+-- player's state machine, so it is taken out there: the hanging state may never
+-- force itself, and jumping / falling may never choose it as their next state.
+--
+-- Behaviours are shared engine objects wrapped once per script; each new player
+-- entity gets the wrappers swapped in. An empty file `ssb_vanilla_ledge.on` in
+-- the pack folder skips all of this, in case a build dislikes it.
+
+local AIR_STATES = { CHAR_STATE.JUMPING, CHAR_STATE.FALLING }
+
+local function swap_behavior(p, state_id, configure)
+    local base = p:get_base_behavior(state_id)
+    if base == nil then
+        return "no vanilla behaviour"
+    end
+    local custom = make_custom_behavior("ssb_state_" .. state_id, state_id, base)
+    configure(custom)
+    p:clear_behavior(base)
+    p:add_behavior(custom)
+    return "ok"
+end
+
+local function remove_ledge_grab(p)
+    if PackFileExists("ssb_vanilla_ledge.on") then
+        Crumb("ledge grab: left to the engine (ssb_vanilla_ledge.on)")
+        return
+    end
+    local function try(state_id, configure)
+        Crumb("ledge grab: wrapping state " .. state_id)
+        local ok, result = pcall(swap_behavior, p, state_id, configure)
+        Crumb("ledge grab: state " .. state_id .. " " .. tostring(result))
+        if not ok then
+            errorf("hero: could not wrap state %d (%s)", state_id, tostring(result))
+        end
+    end
+    try(CHAR_STATE.HANGING, function(custom)
+        custom:set_force_state(function(_movable, _base_fun)
+            return false
+        end)
+    end)
+    for _, state_id in ipairs(AIR_STATES) do
+        try(state_id, function(custom)
+            custom:set_get_next_state_id(function(movable, base_fun)
+                local next_id = base_fun(movable)
+                if next_id == CHAR_STATE.HANGING then
+                    return state_id
+                end
+                return next_id
+            end)
+        end)
+    end
+end
+
 --- Install one entity hook, tolerating a build that does not have it.
 local function hook(p, name, fn)
     Crumb("hook " .. name)
@@ -218,6 +275,8 @@ function Hero.start(p)
     hook(p, "set_pre_damage", on_damage)
     hook(p, "set_pre_stun", on_stun)
     hook(p, "set_post_update_state_machine", on_animate)
+    remove_ledge_grab(p)
+    last_vy = 0.0
 
     p.inventory.bombs = 0
     p.inventory.ropes = Hero.START_ROPES
@@ -251,11 +310,6 @@ function Hero.pre_update(p)
     strip_move = driven
     filter_input(not HAS_INPUT_PHASE)
 
-    if st == CHAR_STATE.HANGING then
-        pcall(function()
-            p:let_go() -- no ledge grabs
-        end)
-    end
     p.falling_timer = 0 -- no fall stun or fall damage
 
     local x, y = get_position(p.uid)
@@ -311,6 +365,18 @@ end
 --- ON.POST_UPDATE, after the engine moved everything.
 --- @param p userdata
 function Hero.post_update(p)
+    -- Backstop for remove_ledge_grab: if the engine hung the hero on a ledge
+    -- anyway, drop it in the same frame and carry on with the speeds it had.
+    if p.state == CHAR_STATE.HANGING then
+        pcall(function()
+            p:let_go()
+        end)
+        p.velocityx = model.vx
+        p.velocityy = last_vy
+        Trace.event(string.format("ledge grab undone (tick %d): state now %s", tick, tostring(p.state)))
+    end
+    last_vy = p.velocityy
+
     local x, y = get_position(p.uid)
     local st = p.state
     local dx = x_before ~= nil and (x - x_before) or 0.0

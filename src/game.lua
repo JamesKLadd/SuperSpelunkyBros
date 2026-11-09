@@ -43,6 +43,16 @@ local function stop()
     end
 end
 
+-- Registered after src/level.lua's own PRE_LOAD_LEVEL_FILES callback (it was
+-- required first), so Level.active already says whether this load is ours.
+set_callback(function()
+    SafeCall("game/before_spawn", function()
+        if Level.active ~= nil then
+            Crumb(Assets.dress_before_spawn())
+        end
+    end)
+end, ON.PRE_LOAD_LEVEL_FILES)
+
 set_callback(function()
     SafeCall("game/level_start", function()
         Hero.stop()

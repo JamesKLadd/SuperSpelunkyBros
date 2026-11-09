@@ -62,9 +62,13 @@ it is.*
 state and, for gravity, only while airborne. On ropes, when stunned and in
 doorways the engine's own apply. *Untested in game.*
 
-**Ledge-grab has no off switch.** The hero is dropped (`Player:let_go`) the
-frame after the engine puts it in the hanging state. Since the engine never
-sees a direction held, it may never grab at all. *Untested in game.*
+**Ledge-grab is removed in the player's state machine.** The engine grabs a
+ledge even with no direction held (seen in game). The hanging state is wrapped
+so it can never force itself, and the jumping and falling states so they can
+never choose it (`src/hero.lua`, `remove_ledge_grab`). If a grab still gets
+through, the hero is dropped in the same frame with the speed it had. An empty
+`ssb_vanilla_ledge.on` in the pack folder turns the wrapping off. *The wrapping
+is untested in game.*
 
 **Facing changes in the air.** A strict 8-bit platformer locks facing while
 airborne; here the hero turns with the stick so the whip can be aimed.
@@ -80,7 +84,12 @@ bottom of the level restarts it.
 
 **The whole character sheet is replaced.** The hero's sheet replaces whichever
 character player 1 picked (`replace_texture`), because the whip and rope are
-drawn from the same sheet. It is put back when the script is disabled.
+drawn from the same sheet. It is done before the level is generated: an entity
+that already exists keeps the sheet it was created with. It is put back when
+the script is disabled.
+
+**Tiles and background are still the Dwelling's.** Only the layout is ours so
+far. Our own tile set and backdrop come with the blocks milestone.
 
 ## Not possible, as far as is known
 

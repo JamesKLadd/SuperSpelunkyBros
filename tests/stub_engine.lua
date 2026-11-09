@@ -71,6 +71,7 @@ state = {
         focused_entity_uid = 0, inertia = 1.0,
     },
     player_inputs = { player_slot_1 = { buttons_gameplay = 0 } },
+    items = { player_select = { { texture = TEXTURE.DATA_TEXTURES_CHAR_GREEN_0 } } },
 }
 
 function get_frame() return Stub.frame end
@@ -138,6 +139,26 @@ function replace_texture(vanilla, custom)
 end
 function reset_texture(vanilla) Stub.replaced[vanilla] = nil end
 
+Stub.custom_behaviors = {}
+function make_custom_behavior(name, state_id, base)
+    assert(base ~= nil and base.vanilla, "make_custom_behavior: needs a vanilla base")
+    local existing = Stub.custom_behaviors[name]
+    if existing ~= nil then
+        return existing
+    end
+    local custom = { state_id = state_id, base = base }
+    function custom:set_force_state(fn)
+        self.force_state = function(m) return fn(m, base.force_state) end
+    end
+    function custom:set_get_next_state_id(fn)
+        self.get_next_state_id = function(m) return fn(m, base.get_next_state_id) end
+    end
+    custom.force_state = base.force_state
+    custom.get_next_state_id = base.get_next_state_id
+    Stub.custom_behaviors[name] = custom
+    return custom
+end
+
 function get_player(_slot, _or_ghost) return Stub.player end
 function get_position(uid)
     assert(Stub.player ~= nil and uid == Stub.player.uid, "get_position: unknown uid")
@@ -155,8 +176,32 @@ function Stub.new_player(x, y)
         uid = Stub.next_uid, x = x, y = y, velocityx = 0.0, velocityy = 0.0,
         state = CHAR_STATE.STANDING, standing_on_uid = 1, flags = 0, falling_timer = 0,
         animation_frame = 0, inventory = { bombs = 4, ropes = 4 }, hooks = {},
-        texture = TEXTURE.DATA_TEXTURES_CHAR_YELLOW_0,
+        texture = Stub.player_texture or state.items.player_select[1].texture,
+        behaviors = {},
     }
+    for _, id in ipairs({ CHAR_STATE.HANGING, CHAR_STATE.JUMPING, CHAR_STATE.FALLING }) do
+        -- the vanilla air states want to hang whenever Stub.at_ledge is set
+        p.behaviors[id] = {
+            vanilla = true, state_id = id,
+            force_state = function() return id == CHAR_STATE.HANGING and Stub.ledge_by_force == true end,
+            get_next_state_id = function()
+                if id ~= CHAR_STATE.HANGING and Stub.ledge_by_next_state then
+                    return CHAR_STATE.HANGING
+                end
+                return id
+            end,
+        }
+    end
+    function p:get_base_behavior(id)
+        local b = self.behaviors[id]
+        if b ~= nil and b.vanilla then return b end
+        return nil
+    end
+    function p:clear_behavior(b)
+        if self.behaviors[b.state_id] == b then self.behaviors[b.state_id] = nil end
+    end
+    function p:add_behavior(b) self.behaviors[b.state_id] = b end
+    do end
     for _, name in ipairs(HOOKS) do
         if not (Stub.missing_hooks and Stub.missing_hooks[name]) then
             p[name] = function(self, fn)
@@ -169,7 +214,9 @@ function Stub.new_player(x, y)
     function p:set_position(to_x, to_y) self.x, self.y = to_x, to_y end
     function p:get_texture() return self.texture end
     function p:set_texture(t) self.texture = t return true end
-    function p:let_go() end
+    function p:let_go()
+        if self.state == CHAR_STATE.HANGING then self.state = CHAR_STATE.FALLING end
+    end
     Stub.player = p
     Stub.prev_jump = false
     return p
@@ -262,6 +309,18 @@ function Stub.step(buttons)
 
     if Stub.gravity_after_move then
         gravity()
+    end
+
+    -- the state machine: a forced hang, or the air state choosing to hang
+    if p.standing_on_uid == -1 and (p.state == CHAR_STATE.JUMPING or p.state == CHAR_STATE.FALLING) then
+        local hanging = p.behaviors[CHAR_STATE.HANGING]
+        local current = p.behaviors[p.state]
+        if (hanging ~= nil and hanging.force_state(p))
+            or (current ~= nil and current.get_next_state_id(p) == CHAR_STATE.HANGING) then
+            p.state = CHAR_STATE.HANGING
+            p.velocityx, p.velocityy = 0.0, 0.0
+            Stub.hung = (Stub.hung or 0) + 1
+        end
     end
 
     if hooks.set_post_update_state_machine then

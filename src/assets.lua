@@ -26,26 +26,54 @@ local function define_hero()
     return hero_texture
 end
 
---- Give the player the hero's look. Replacing the character's own sheet (rather
---- than only the entity's texture) also covers the whip and the rope, which are
+--- Swap one vanilla character sheet for the hero's. Replacing the sheet (rather
+--- than only an entity's texture) also covers the whip and the rope, which are
 --- drawn from the same sheet.
---- @param p userdata
---- @return string # what happened, for the trace header
-function Assets.dress_hero(p)
+--- @return string? # what happened, or nil if nothing needed doing
+local function replace_sheet(vanilla)
     local texture = define_hero()
     if texture == nil then
         return "hero texture: missing file"
     end
-    local vanilla = p:get_texture()
-    if vanilla == texture or replaced[vanilla] then
-        return "hero texture: already applied"
+    if vanilla == nil or vanilla == texture or replaced[vanilla] then
+        return nil
     end
     if replace_texture(vanilla, texture) then
         replaced[vanilla] = true
         return "hero texture: replaced vanilla texture " .. tostring(vanilla)
     end
-    p:set_texture(texture)
-    return "hero texture: replace_texture refused, set on the entity only"
+    return "hero texture: replace_texture refused for " .. tostring(vanilla)
+end
+
+--- Before a level is generated: replace the sheet of the character player 1
+--- picked. It has to happen before the player entity exists: an entity that is
+--- already spawned keeps drawing the sheet it was created with (seen in game:
+--- the first level showed the vanilla character, later levels the hero).
+--- @return string
+function Assets.dress_before_spawn()
+    local ok, vanilla = pcall(function()
+        return state.items.player_select[1].texture
+    end)
+    if not ok or vanilla == nil then
+        return "hero texture: could not read player 1's character before spawn"
+    end
+    return replace_sheet(vanilla) or "hero texture: already applied"
+end
+
+--- At level start, for whatever dress_before_spawn could not cover: if the sheet
+--- was only replaced now, the player entity is given the texture directly too.
+--- @param p userdata
+--- @return string # what happened, for the trace header
+function Assets.dress_hero(p)
+    local result = replace_sheet(p:get_texture())
+    if result == nil then
+        return "hero texture: already applied"
+    end
+    if hero_texture ~= nil then
+        p:set_texture(hero_texture)
+        result = result .. ", and set on the player entity"
+    end
+    return result
 end
 
 --- Put every replaced vanilla texture back.

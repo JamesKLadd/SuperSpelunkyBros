@@ -394,12 +394,107 @@ def test_script_disable_puts_textures_back(pack):
     (pack / "res" / "hero.png").write_bytes(b"png")
     rt = boot(pack)
     rt.execute("Stub.start_level()")
-    char = MANIFEST["enums"]["TEXTURE"]["DATA_TEXTURES_CHAR_YELLOW_0"]
+    char = MANIFEST["enums"]["TEXTURE"]["DATA_TEXTURES_CHAR_GREEN_0"]  # the stub's player 1
     assert rt.eval("Stub.defined_path") == "res/hero.png"
     assert rt.eval(f"Stub.replaced[{char}]") == 9001
     rt.execute("Stub.fire(ON.SCRIPT_DISABLE)")
     assert rt.eval(f"Stub.replaced[{char}]") is None
     assert errors(rt) == []
+
+
+def with_sheet(pack, before=""):
+    (pack / "res").mkdir()
+    (pack / "res" / "hero.png").write_bytes(b"png")
+    return boot(pack, before=before)
+
+
+def test_the_hero_sheet_is_in_place_before_the_player_spawns(pack):
+    """Found in game: the first level showed the vanilla character, because the
+    sheet was replaced at level start, after the player entity already existed."""
+    rt = with_sheet(pack)
+    rt.execute("""
+        set_callback(function()
+            replacedBeforeSpawn = Stub.replaced[state.items.player_select[1].texture]
+            playerExisted = Stub.player ~= nil
+        end, ON.PRE_LEVEL_GENERATION)
+        Stub.start_level()
+    """)
+    assert rt.eval("playerExisted") is False
+    assert rt.eval("replacedBeforeSpawn") == 9001
+    assert rt.eval("Stub.player.texture") == rt.eval("state.items.player_select[1].texture"), \
+        "the entity keeps its own sheet id; the sheet behind it is what changed"
+    assert "hero texture: replaced vanilla texture 290" in (pack / "ssb_boot.log").read_text()
+
+
+def test_the_camp_does_not_get_the_hero_sheet(pack):
+    rt = with_sheet(pack)
+    rt.execute("state.screen = SCREEN.CAMP; Stub.fire(ON.PRE_LOAD_LEVEL_FILES, {})")
+    assert rt.eval("next(Stub.replaced)") is None
+
+
+def test_the_player_entity_is_dressed_directly_when_the_early_path_fails(pack):
+    rt = with_sheet(pack, before="""
+        state.items = nil  -- a build where the selection cannot be read
+        Stub.player_texture = 290
+    """)
+    rt.execute("Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == 9001
+    assert rt.eval("Stub.player.texture") == 9001, "set on the entity too, so the first level is right"
+    assert errors(rt) == []
+
+
+@pytest.mark.parametrize("mechanism", ["ledge_by_force", "ledge_by_next_state"])
+def test_the_hero_never_hangs_from_a_ledge(pack, mechanism):
+    """Found in game: the engine grabbed the 5-high ledge with no direction held.
+    Whichever way the state machine reaches the hanging state, it must not."""
+    rt = boot(pack, before=f"Stub.{mechanism} = true")
+    rt.execute("Stub.start_level()")
+    apex(rt, JUMP, 200)
+    assert rt.eval("Stub.hung") is None
+    assert errors(rt) == []
+    crumbs = (pack / "ssb_boot.log").read_text()
+    for state_id in (CHAR["HANGING"], CHAR["JUMPING"], CHAR["FALLING"]):
+        assert f"ledge grab: state {state_id} ok" in crumbs
+
+
+def test_the_stub_does_hang_when_left_alone(pack):
+    """The test above means something only if the stub grabs ledges by itself."""
+    (pack / "ssb_vanilla_ledge.on").write_text("")
+    rt = boot(pack, before="Stub.ledge_by_next_state = true")
+    rt.execute("Stub.start_level()")
+    assert "left to the engine" in (pack / "ssb_boot.log").read_text()
+    step(rt, JUMP, 3)
+    assert rt.eval("Stub.hung") >= 1
+
+
+def test_a_hang_that_gets_through_is_undone_the_same_frame(pack):
+    """Backstop: with the state machine left alone, the hero is dropped at once
+    and keeps the speed it had, instead of stopping dead on the ledge."""
+    (pack / "ssb_vanilla_ledge.on").write_text("")
+    (pack / "ssb_trace.on").write_text("")
+    rt = boot(pack)
+    rt.execute("Stub.start_level()")
+    step(rt, RIGHT | RUN, 60)
+    step(rt, RIGHT | RUN | JUMP, 5)
+    vy = player(rt).velocityy
+    assert vy > 0.2
+    rt.execute("Stub.ledge_by_next_state = true")
+    step(rt, RIGHT | RUN | JUMP)
+    rt.execute("Stub.ledge_by_next_state = false")
+    p = player(rt)
+    assert p.state != CHAR["HANGING"]
+    assert p.velocityx == pytest.approx(2.5625 / 16)
+    assert p.velocityy == pytest.approx(vy, abs=0.02)
+    rt.execute("state.screen = SCREEN.CAMP; Stub.fire(ON.SCREEN)")
+    assert "ledge grab undone" in (pack / "ssb_trace.log").read_text()
+
+
+def test_wrapping_failing_is_reported_and_play_goes_on(pack):
+    rt = boot(pack, before="function make_custom_behavior() error('not on this build') end")
+    rt.execute("Stub.start_level()")
+    assert any("could not wrap state" in e for e in errors(rt))
+    step(rt, RIGHT, 30)
+    assert player(rt).x > 8
 
 
 def test_without_the_hero_sheet_the_mod_says_how_to_build_it(game):

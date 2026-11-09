@@ -53,6 +53,11 @@ When something looks wrong, send `ssb_trace.log` and the checklist item.
 
 ### If the game crashes
 
+If it crashes right at level start after an update that touched the hero, try
+once with an empty file named `ssb_vanilla_ledge.on` in the pack folder: it
+turns off the one part that rewires the player's state machine. Tell me either
+way.
+
 `ssb_boot.log` in the pack folder is always written, no flag needed: one line
 per step of loading the script and of loading a level, flushed as each step
 starts. After a crash, the last line is the step that did not finish. Send that
@@ -67,11 +72,12 @@ Turn the trace on first. For each item, "ok" or what you saw instead.
 
 **Loading**
 
-1. The level is a flat dirt floor with floating ledges, not a Dwelling level.
+1. The level is a flat floor with floating ledges, not a Dwelling level. The
+   tiles and background still look like the Dwelling for now.
    If you get a normal Dwelling level, tell me, and whether any `[SSB ERROR]`
    line showed on screen.
-2. The hero is a hard-hat kid in a teal jacket, not Ana. The view is zoomed
-   out (about 25 tiles wide).
+2. The hero is a hard-hat kid in a teal jacket from the first level on, not
+   the character you picked. The view is zoomed out (about 25 tiles wide).
 3. The HUD shows 0 bombs and 2 ropes.
 
 **Ground movement**
@@ -97,7 +103,8 @@ Turn the trace on first. For each item, "ok" or what you saw instead.
 
 **Things that must not happen**
 
-15. Jump at the 3-tile wall and hold toward it: no ledge-grab, no wall-cling.
+15. Jump at the 3-tile wall and hold toward it, and jump at the ledge 5 up
+    from a standstill: no ledge-grab, no wall-cling, no hanging pose.
 16. The bomb button does nothing.
 17. Long falls (off the staircase): no stun, no damage.
 
