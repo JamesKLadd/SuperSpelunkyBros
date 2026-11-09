@@ -225,10 +225,19 @@ def test_the_walk_animation_runs_while_moving(game):
     assert len(frames) >= 6, "cycles through the walk cells 1..8"
 
 
-def test_the_skid_frame_shows_when_reversing(game):
+def test_the_skid_frame_shows_when_reversing(pack):
+    game = with_sheet(pack)
+    game.execute("Stub.start_level()")
     step(game, RIGHT | RUN, 90)
     step(game, LEFT | RUN, 4)
     assert player(game).animation_frame == 11 * 16 + 11
+
+
+def test_no_skid_frame_without_the_hero_sheet(game):
+    """The skid cell exists only on our sheet; on any other it would be a blank frame."""
+    step(game, RIGHT | RUN, 90)
+    step(game, LEFT | RUN, 4)
+    assert player(game).animation_frame in range(0, 9)
 
 
 def test_the_camera_only_moves_forward(game):
@@ -424,6 +433,30 @@ def test_the_hero_sheet_is_in_place_before_the_player_spawns(pack):
     assert rt.eval("Stub.player.texture") == rt.eval("state.items.player_select[1].texture"), \
         "the entity keeps its own sheet id; the sheet behind it is what changed"
     assert "hero texture: replaced vanilla texture 290" in (pack / "ssb_boot.log").read_text()
+
+
+def test_keep_my_character_leaves_the_sheet_alone(pack):
+    rt = with_sheet(pack)
+    assert rt.eval("options.keep_character") is False, "off by default"
+    rt.execute("options.keep_character = true; Stub.start_level()")
+    assert rt.eval("next(Stub.replaced)") is None
+    assert rt.eval("Stub.player.texture") == 290
+    assert "keeping the selected character" in (pack / "ssb_boot.log").read_text()
+    # a vanilla-layout sheet has no skid cell: the walk cells are used instead
+    step(rt, RIGHT | RUN, 90)
+    step(rt, LEFT | RUN, 4)
+    assert player(rt).animation_frame in range(0, 9)
+    assert errors(rt) == []
+
+
+def test_turning_keep_my_character_on_mid_run_puts_the_sheet_back(pack):
+    rt = with_sheet(pack)
+    rt.execute("Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == 9001
+    rt.execute("options.keep_character = true; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") is None
+    rt.execute("options.keep_character = false; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == 9001
 
 
 def test_the_camp_does_not_get_the_hero_sheet(pack):

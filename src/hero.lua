@@ -20,6 +20,7 @@ local Physics = require("src.physics")
 local Level = require("src.level")
 local Camera = require("src.camera")
 local Trace = require("src.trace")
+local Assets = require("src.assets")
 
 local Hero = {}
 SSB.Hero = Hero
@@ -170,7 +171,7 @@ local function on_animate(self)
     if model == nil or self.state ~= CHAR_STATE.STANDING or self.standing_on_uid == -1 then
         return
     end
-    if model.skidding then
+    if model.skidding and Assets.hero_sheet_in_use() then
         self.animation_frame = SKID_FRAME
     elseif math.abs(model.vx) > 0.004 then
         self.animation_frame = WALK_FIRST + math.floor(walk_phase) % WALK_COUNT

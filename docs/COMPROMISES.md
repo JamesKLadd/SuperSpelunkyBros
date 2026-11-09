@@ -88,6 +88,9 @@ drawn from the same sheet. It is done before the level is generated: an entity
 that already exists keeps the sheet it was created with. It is put back when
 the script is disabled.
 
+With the **Keep my selected character** option on, nothing is replaced and the
+skid pose is not shown: vanilla-layout sheets have no cell for it.
+
 **Tiles and background are still the Dwelling's.** Only the layout is ours so
 far. Our own tile set and backdrop come with the blocks milestone.
 

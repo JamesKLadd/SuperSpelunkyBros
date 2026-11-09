@@ -74,6 +74,13 @@ state = {
     items = { player_select = { { texture = TEXTURE.DATA_TEXTURES_CHAR_GREEN_0 } } },
 }
 
+options = {}
+function register_option_bool(name, desc, long_desc, value)
+    assert(type(name) == "string" and type(desc) == "string" and type(long_desc) == "string")
+    assert(type(value) == "boolean")
+    options[name] = value
+end
+
 function get_frame() return Stub.frame end
 function zoom(level) Stub.zoom = level end
 function zoom_reset() Stub.zoom = 13.5 end

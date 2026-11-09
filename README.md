@@ -30,6 +30,16 @@ sound or HUD yet. Nothing here has been run in the game yet: see the checklist.
 
 Disable the pack to get the normal game back.
 
+## Options
+
+In Playlunky's script options for this mod:
+
+- **Keep my selected character**: play as the character you picked on the
+  character select screen, or any character pack you have installed for it,
+  instead of this mod's hero. Off by default. Takes effect at the next level.
+  Movement is identical; only the skid pose is missing, since that is an extra
+  frame on the mod's own sheet.
+
 ## Controls
 
 Spelunky's own bindings: move, jump, run, whip, rope, crouch. The bomb button

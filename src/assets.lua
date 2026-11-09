@@ -6,6 +6,16 @@ SSB.Assets = Assets
 
 local HERO_SHEET = "res/hero.png"
 
+register_option_bool("keep_character", "Keep my selected character",
+    "Play as the character picked on the character select screen (or any character pack"
+    .. " installed for it) instead of this mod's own hero. Takes effect at the next level.",
+    false)
+
+--- True when the player asked to keep their own character.
+local function keeping_character()
+    return type(options) == "table" and options.keep_character == true
+end
+
 local hero_texture = nil
 local replaced = {} -- vanilla texture id -> true, for undoing
 
@@ -51,6 +61,10 @@ end
 --- the first level showed the vanilla character, later levels the hero).
 --- @return string
 function Assets.dress_before_spawn()
+    if keeping_character() then
+        Assets.restore()
+        return "hero texture: keeping the selected character (option)"
+    end
     local ok, vanilla = pcall(function()
         return state.items.player_select[1].texture
     end)
@@ -65,6 +79,9 @@ end
 --- @param p userdata
 --- @return string # what happened, for the trace header
 function Assets.dress_hero(p)
+    if keeping_character() then
+        return "hero texture: keeping the selected character (option)"
+    end
     local result = replace_sheet(p:get_texture())
     if result == nil then
         return "hero texture: already applied"
@@ -74,6 +91,13 @@ function Assets.dress_hero(p)
         result = result .. ", and set on the player entity"
     end
     return result
+end
+
+--- True while the hero's own sheet is what the player is drawn from. Only that
+--- sheet has the extra skid cell; a vanilla-layout sheet does not.
+--- @return boolean
+function Assets.hero_sheet_in_use()
+    return next(replaced) ~= nil
 end
 
 --- Put every replaced vanilla texture back.
