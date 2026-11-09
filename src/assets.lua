@@ -11,13 +11,26 @@ register_option_bool("keep_character", "Keep my selected character",
     .. " installed for it) instead of this mod's own hero. Takes effect at the next level.",
     false)
 
+register_option_bool("builtin_hero", "Use the mod's built-in hero",
+    "Draw the player from this mod's own generated sheet (res/hero.png) instead of the"
+    .. " game's red character sheet. Ignored while 'Keep my selected character' is on.",
+    false)
+
+--- The sheet the hero is drawn from unless an option says otherwise: the game's
+--- red character sheet (char_red.png), including whatever a pack has put there.
+local DEFAULT_SHEET = TEXTURE.DATA_TEXTURES_CHAR_RED_0
+
+local function using_builtin()
+    return type(options) == "table" and options.builtin_hero == true
+end
+
 --- True when the player asked to keep their own character.
 local function keeping_character()
     return type(options) == "table" and options.keep_character == true
 end
 
 local hero_texture = nil
-local replaced = {} -- vanilla texture id -> true, for undoing
+local replaced = {} -- vanilla texture id -> the texture it now shows, for undoing
 
 --- The hero sheet has the layout of a vanilla character sheet (2048 x 2048, 128
 --- pixel cells), so the definition is copied from one and only the file swapped.
@@ -36,21 +49,38 @@ local function define_hero()
     return hero_texture
 end
 
---- Swap one vanilla character sheet for the hero's. Replacing the sheet (rather
+--- The texture the hero should be drawn from under the current options.
+--- @return integer? texture, string name
+local function wanted_sheet()
+    if using_builtin() then
+        return define_hero(), "the built-in hero"
+    end
+    return DEFAULT_SHEET, "the red character sheet"
+end
+
+--- Point one vanilla character sheet at the hero's. Replacing the sheet (rather
 --- than only an entity's texture) also covers the whip and the rope, which are
 --- drawn from the same sheet.
 --- @return string? # what happened, or nil if nothing needed doing
 local function replace_sheet(vanilla)
-    local texture = define_hero()
+    local texture, name = wanted_sheet()
     if texture == nil then
         return "hero texture: missing file"
     end
-    if vanilla == nil or vanilla == texture or replaced[vanilla] then
+    if vanilla == nil or replaced[vanilla] == texture then
         return nil
     end
+    if replaced[vanilla] ~= nil then
+        -- the option changed since last level: undo the old choice first
+        pcall(reset_texture, vanilla)
+        replaced[vanilla] = nil
+    end
+    if vanilla == texture then
+        return nil -- the selected character already is that sheet
+    end
     if replace_texture(vanilla, texture) then
-        replaced[vanilla] = true
-        return "hero texture: replaced vanilla texture " .. tostring(vanilla)
+        replaced[vanilla] = texture
+        return "hero texture: " .. tostring(vanilla) .. " now shows " .. name
     end
     return "hero texture: replace_texture refused for " .. tostring(vanilla)
 end
@@ -86,18 +116,27 @@ function Assets.dress_hero(p)
     if result == nil then
         return "hero texture: already applied"
     end
-    if hero_texture ~= nil then
-        p:set_texture(hero_texture)
+    local texture = wanted_sheet()
+    if texture ~= nil and result:find("now shows", 1, true) ~= nil then
+        p:set_texture(texture)
         result = result .. ", and set on the player entity"
     end
     return result
 end
 
---- True while the hero's own sheet is what the player is drawn from. Only that
---- sheet has the extra skid cell; a vanilla-layout sheet does not.
+--- True while the built-in hero sheet is what the player is drawn from. Only
+--- that sheet has the extra skid cell; a vanilla-layout sheet does not.
 --- @return boolean
 function Assets.hero_sheet_in_use()
-    return next(replaced) ~= nil
+    if hero_texture == nil then
+        return false
+    end
+    for _, shown in pairs(replaced) do
+        if shown == hero_texture then
+            return true
+        end
+    end
+    return false
 end
 
 --- Put every replaced vanilla texture back.

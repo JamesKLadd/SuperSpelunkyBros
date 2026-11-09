@@ -399,9 +399,7 @@ def test_leaving_the_level_restores_zoom_and_the_ghost(game):
 
 
 def test_script_disable_puts_textures_back(pack):
-    (pack / "res").mkdir()
-    (pack / "res" / "hero.png").write_bytes(b"png")
-    rt = boot(pack)
+    rt = with_sheet(pack)
     rt.execute("Stub.start_level()")
     char = MANIFEST["enums"]["TEXTURE"]["DATA_TEXTURES_CHAR_GREEN_0"]  # the stub's player 1
     assert rt.eval("Stub.defined_path") == "res/hero.png"
@@ -412,9 +410,12 @@ def test_script_disable_puts_textures_back(pack):
 
 
 def with_sheet(pack, before=""):
+    """Boot with the generated sheet present and the built-in hero switched on."""
     (pack / "res").mkdir()
     (pack / "res" / "hero.png").write_bytes(b"png")
-    return boot(pack, before=before)
+    rt = boot(pack, before=before)
+    rt.execute("options.builtin_hero = true")
+    return rt
 
 
 def test_the_hero_sheet_is_in_place_before_the_player_spawns(pack):
@@ -432,7 +433,7 @@ def test_the_hero_sheet_is_in_place_before_the_player_spawns(pack):
     assert rt.eval("replacedBeforeSpawn") == 9001
     assert rt.eval("Stub.player.texture") == rt.eval("state.items.player_select[1].texture"), \
         "the entity keeps its own sheet id; the sheet behind it is what changed"
-    assert "hero texture: replaced vanilla texture 290" in (pack / "ssb_boot.log").read_text()
+    assert "hero texture: 290 now shows the built-in hero" in (pack / "ssb_boot.log").read_text()
 
 
 def test_keep_my_character_leaves_the_sheet_alone(pack):
@@ -530,7 +531,44 @@ def test_wrapping_failing_is_reported_and_play_goes_on(pack):
     assert player(rt).x > 8
 
 
-def test_without_the_hero_sheet_the_mod_says_how_to_build_it(game):
+RED = MANIFEST["enums"]["TEXTURE"]["DATA_TEXTURES_CHAR_RED_0"]
+
+
+def test_by_default_the_hero_is_the_red_character_sheet(game):
+    """Whatever character was picked (the stub's is green), it is drawn from the
+    game's char_red sheet, so a pack that replaces char_red.png sets the hero."""
+    assert game.eval("options.builtin_hero") is False and game.eval("options.keep_character") is False
+    assert game.eval("Stub.replaced[290]") == RED
+    assert game.eval("Stub.defined_path") is None, "the built-in sheet is not even loaded"
+    step(game, RIGHT | RUN, 90)
+    step(game, LEFT | RUN, 4)
+    assert player(game).animation_frame in range(0, 9), "no skid cell on a vanilla-layout sheet"
+    assert errors(game) == []
+
+
+def test_picking_the_red_character_needs_no_replacing(pack):
+    rt = boot(pack, before=f"state.items.player_select[1].texture = {RED}")
+    rt.execute("Stub.start_level()")
+    assert rt.eval("next(Stub.replaced)") is None
+    assert errors(rt) == []
+
+
+def test_switching_between_the_three_looks(pack):
+    rt = with_sheet(pack)
+    rt.execute("options.builtin_hero = false; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == RED
+    rt.execute("options.builtin_hero = true; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == 9001
+    rt.execute("options.keep_character = true; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") is None
+    rt.execute("options.keep_character = false; options.builtin_hero = false; Stub.start_level()")
+    assert rt.eval("Stub.replaced[290]") == RED
+    assert errors(rt) == []
+
+
+def test_without_the_hero_sheet_the_mod_says_how_to_build_it(pack):
+    game = boot(pack)
+    game.execute("options.builtin_hero = true; Stub.start_level()")
     printed = list(game.eval("Stub.printed").values())
     assert any("python tools/build_assets.py" in line for line in printed)
     assert game.eval("Stub.defined_path") is None

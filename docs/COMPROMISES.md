@@ -82,14 +82,17 @@ written to the trace. The three-hit health system and the level-restart /
 back-to-camp rules arrive with the power-up milestone. Falling out of the
 bottom of the level restarts it.
 
-**The whole character sheet is replaced.** The hero's sheet replaces whichever
-character player 1 picked (`replace_texture`), because the whip and rope are
-drawn from the same sheet. It is done before the level is generated: an entity
-that already exists keeps the sheet it was created with. It is put back when
-the script is disabled.
+**The picked character's sheet is pointed at another one.** By default the
+sheet of whichever character player 1 picked is replaced with the game's red
+character sheet (`replace_texture`), so the hero looks the same whoever is
+picked; an option uses the mod's generated sheet instead, and another leaves
+the picked character alone. The whole sheet is swapped, not just the entity's
+texture, because the whip and rope are drawn from it. It is done before the
+level is generated: an entity that already exists keeps the sheet it was
+created with. It is put back when the script is disabled.
 
-With the **Keep my selected character** option on, nothing is replaced and the
-skid pose is not shown: vanilla-layout sheets have no cell for it.
+The skid pose exists only on the mod's generated sheet; with any other sheet
+the walk frames are shown during a skid.
 
 **Tiles and background are still the Dwelling's.** Only the layout is ours so
 far. Our own tile set and backdrop come with the blocks milestone.

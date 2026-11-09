@@ -32,13 +32,20 @@ Disable the pack to get the normal game back.
 
 ## Options
 
+By default the hero is drawn from the game's **red character sheet**
+(`char_red.png`), whichever character you pick. To choose the hero's look, put
+your own character sheet at `Data/Textures/char_red.png` in a Playlunky pack
+(this one or any other); it must use the vanilla character sheet layout. That
+file is yours and stays on your machine: `Data/` is ignored by git.
+
 In Playlunky's script options for this mod:
 
 - **Keep my selected character**: play as the character you picked on the
-  character select screen, or any character pack you have installed for it,
-  instead of this mod's hero. Off by default. Takes effect at the next level.
-  Movement is identical; only the skid pose is missing, since that is an extra
-  frame on the mod's own sheet.
+  character select screen instead. Off by default.
+- **Use the mod's built-in hero**: use the sheet `tools/build_assets.py`
+  generates (`res/hero.png`). Off by default. Only this sheet has a skid pose.
+
+Both take effect at the next level. Movement is the same in every case.
 
 ## Controls
 
@@ -86,8 +93,8 @@ Turn the trace on first. For each item, "ok" or what you saw instead.
    tiles and background still look like the Dwelling for now.
    If you get a normal Dwelling level, tell me, and whether any `[SSB ERROR]`
    line showed on screen.
-2. The hero is a hard-hat kid in a teal jacket from the first level on, not
-   the character you picked. The view is zoomed out (about 25 tiles wide).
+2. The hero is drawn from the red character sheet from the first level on,
+   whichever character you picked. The view is zoomed out (about 25 tiles wide).
 3. The HUD shows 0 bombs and 2 ropes.
 
 **Ground movement**
