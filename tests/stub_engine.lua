@@ -90,9 +90,26 @@ end
 function spawn_grid_entity(entity_type, x, y, layer)
     assert(entity_type ~= nil, "spawn_grid_entity: nil entity type")
     assert(layer == LAYER.FRONT)
-    Stub.tiles[key(x, y)] = entity_type
     Stub.next_uid = Stub.next_uid + 1
+    -- As in the real engine: a floor spawned during level generation that is not
+    -- from a tile code counts as floor spreading, and the level library destroys
+    -- every such entity for as long as its callback is registered.
+    if Stub.in_level_gen and Stub.floor_spread_callback ~= nil then
+        return Stub.next_uid
+    end
+    Stub.tiles[key(x, y)] = Stub.next_uid
     return Stub.next_uid
+end
+
+function get_grid_entity_at(x, y, layer)
+    assert(layer == LAYER.FRONT)
+    return Stub.tiles[key(x, y)] or -1
+end
+
+function clear_callback(id)
+    if id ~= nil and id == Stub.floor_spread_callback then
+        Stub.floor_spread_callback = nil
+    end
 end
 
 function Stub.solid(x, y)
@@ -258,7 +275,11 @@ function Stub.start_level()
     state.screen = SCREEN.LEVEL
     Stub.tiles = {}
     Stub.fire(ON.PRE_LOAD_LEVEL_FILES, {})
+    Stub.in_level_gen = true
+    Stub.fire(ON.PRE_LEVEL_GENERATION)
+    Stub.fire(ON.POST_ROOM_GENERATION)
     Stub.fire(ON.POST_LEVEL_GENERATION)
+    Stub.in_level_gen = false
     local Grid = SSB.Grid
     local x, y = SSB.Level.world(0, Grid.START_COL, Grid.START_ROW)
     Stub.new_player(x, y)
@@ -267,12 +288,19 @@ function Stub.start_level()
 end
 
 package.preload["src.vendor.custom_levels.custom_levels"] = function()
-    return {
-        load_level_custom_theme = function(ctx, file_name, theme)
-            assert(ctx ~= nil)
-            Stub.loaded = { file = file_name, theme = theme }
-        end,
-        unload_level = function() Stub.loaded = nil end,
-        set_hide_entrance = function(_hide) end,
-    }
+    local lib = { state = {} }
+    function lib.load_level_custom_theme(ctx, file_name, theme)
+        assert(ctx ~= nil)
+        Stub.loaded = { file = file_name, theme = theme }
+        -- the real library registers its floor-spreading remover on every load
+        Stub.floor_spread_callback = 7001
+        lib.state.floor_spread_callback = 7001
+    end
+    function lib.unload_level()
+        Stub.loaded = nil
+        Stub.floor_spread_callback = nil
+        lib.state.floor_spread_callback = nil
+    end
+    function lib.set_hide_entrance(_hide) end
+    return lib
 end

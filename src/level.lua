@@ -67,6 +67,27 @@ end
 
 -- ------------------------------------------------------------------- loading
 
+--- Stop the level library deleting the tiles we place.
+---
+--- The library removes "floor spreading" (the engine growing extra floor around a
+--- level's tiles) by destroying every entity spawned with that spawn type. But
+--- the engine hook classifies ANY ordinary floor spawned during level generation
+--- that did not come from a tile code as floor spreading (overlunky spawn_api.cpp,
+--- `is_floor_spreading`), and ON.POST_LEVEL_GENERATION still runs inside level
+--- generation. So every floor placed from there was destroyed the instant it
+--- spawned: the level loaded, and was empty.
+---
+--- Our .lvl files contain no floor and set both spread chances to 0, so there is
+--- nothing for the library's callback to do except that. It is removed after each
+--- load, through the handle the library keeps in its exported state.
+local function keep_script_floors()
+    local lib = custom_levels.state
+    if lib ~= nil and lib.floor_spread_callback ~= nil then
+        clear_callback(lib.floor_spread_callback)
+        lib.floor_spread_callback = nil
+    end
+end
+
 set_callback(function(ctx)
     SafeCall("level/pre_load_level_files", function()
         Crumb(string.format("pre_load_level_files: screen=%s world=%s level=%s theme=%s",
@@ -91,6 +112,7 @@ set_callback(function(ctx)
         custom_levels.set_hide_entrance(true)
         custom_levels.load_level_custom_theme(ctx, file,
             { theme = THEME.DWELLING, width = 8, height = strips * 2 })
+        keep_script_floors()
         Crumb("level library accepted the level; the engine generates it next")
     end)
 end, ON.PRE_LOAD_LEVEL_FILES)
@@ -131,7 +153,27 @@ set_callback(function()
                 end
             end
         end
-        Crumb(string.format("placed %d tiles in %d strips", placed, a.strips))
+        -- Asking for a tile is not having one: check that they are really there.
+        local found = 0
+        for k = 0, a.strips - 1 do
+            local origin = Grid.strip_origin(k)
+            for lc = 0, Grid.STRIP_W - 1 do
+                if Grid.is_solid(Grid.cell(a.def, origin + lc, Grid.ROWS - 1)) then
+                    local x, y = Level.world(k, lc, Grid.ROWS - 1)
+                    if get_grid_entity_at(x, y, LAYER.FRONT) ~= -1 then
+                        found = found + 1
+                    end
+                end
+            end
+        end
+        local sx, sy = Level.world(0, Grid.START_COL, Grid.START_ROW + 1)
+        local under_start = get_grid_entity_at(sx, sy, LAYER.FRONT)
+        Crumb(string.format("placed %d tiles in %d strips; bottom row has %d in the grid; under the start: uid %s",
+            placed, a.strips, found, tostring(under_start)))
+        if under_start == -1 then
+            errorf("level %s: the tiles were placed but are not in the level (something destroyed them)",
+                a.def.name)
+        end
     end)
 end, ON.POST_LEVEL_GENERATION)
 

@@ -72,6 +72,27 @@ def test_the_level_is_built_in_every_strip(game):
     assert game.eval("Stub.solid(SSB.Level.world(0, 60, 11))"), "the low ceiling is there"
 
 
+def test_the_level_librarys_floor_remover_is_disarmed(game):
+    """Found in game: the level loaded empty and the hero fell through it.
+
+    The library destroys anything spawned as "floor spreading", and the engine
+    counts every floor a script places during level generation as that. The stub
+    reproduces both halves; src/level.lua must clear the library's callback.
+    """
+    assert game.eval("Stub.floor_spread_callback") is None
+    assert game.eval("Stub.tile_count()") > 300
+    game.execute("local x, y = SSB.Level.world(0, 4, 14); underStart = get_grid_entity_at(x, y, LAYER.FRONT)")
+    assert game.eval("underStart") != -1
+    assert errors(game) == []
+
+
+def test_tiles_that_did_not_survive_are_reported(pack):
+    rt = boot(pack, before="function clear_callback() end  -- a build where disarming does nothing")
+    rt.execute("Stub.start_level()")
+    assert any("placed but are not in the level" in e for e in errors(rt))
+    assert "under the start: uid -1" in (pack / "ssb_boot.log").read_text()
+
+
 def test_no_tile_is_placed_on_the_exit_door(pack):
     """The blank level has its exit at the far end of the last strip."""
     rt = boot(pack)
