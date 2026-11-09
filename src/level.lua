@@ -52,6 +52,13 @@ function Level.kill_y()
     return Y0 - (Level.active.strip * Grid.ROWS + 14.9)
 end
 
+--- Where the blank .lvl puts the exit door (tools/build_assets.py): the far end
+--- of the last strip, on the row the hero walks on. No tile is placed there.
+--- @return integer strip, integer local_col, integer row
+function Level.exit_cell()
+    return Level.active.strips - 1, Grid.STRIP_W - 2, Grid.START_ROW
+end
+
 --- Position along the whole level, in tiles from its left end.
 --- @param x number # world x
 function Level.global_x(x)
@@ -62,7 +69,8 @@ end
 
 set_callback(function(ctx)
     SafeCall("level/pre_load_level_files", function()
-        dbgf("pre_load_level_files: screen=%s", tostring(state.screen))
+        Crumb(string.format("pre_load_level_files: screen=%s world=%s level=%s theme=%s",
+            tostring(state.screen), tostring(state.world), tostring(state.level), tostring(state.theme)))
         if state.screen ~= SCREEN.LEVEL then
             custom_levels.unload_level()
             Level.active = nil
@@ -78,12 +86,28 @@ set_callback(function(ctx)
         end
         local strips = Grid.strip_count(def.width)
         Level.active = { def = def, strips = strips, strip = 0, restarting = false }
+        local file = string.format("ssb_blank_8x%d.lvl", strips * 2)
+        Crumb("loading " .. def.name .. " as " .. file)
         custom_levels.set_hide_entrance(true)
-        custom_levels.load_level_custom_theme(ctx,
-            string.format("ssb_blank_8x%d.lvl", strips * 2),
+        custom_levels.load_level_custom_theme(ctx, file,
             { theme = THEME.DWELLING, width = 8, height = strips * 2 })
+        Crumb("level library accepted the level; the engine generates it next")
     end)
 end, ON.PRE_LOAD_LEVEL_FILES)
+
+-- Breadcrumbs through the engine's own level generation, to bracket a crash in it.
+set_callback(function()
+    if Level.active ~= nil then
+        Crumb("pre_level_generation")
+    end
+end, ON.PRE_LEVEL_GENERATION)
+
+set_callback(function()
+    if Level.active ~= nil then
+        Crumb(string.format("post_room_generation: level is %s x %s rooms",
+            tostring(state.width), tostring(state.height)))
+    end
+end, ON.POST_ROOM_GENERATION)
 
 set_callback(function()
     SafeCall("level/build", function()
@@ -91,12 +115,15 @@ set_callback(function()
         if a == nil or state.screen ~= SCREEN.LEVEL then
             return
         end
+        Crumb("post_level_generation: placing tiles")
         local placed = 0
+        local exit_strip, exit_col, exit_row = Level.exit_cell()
         for k = 0, a.strips - 1 do
             local origin = Grid.strip_origin(k)
             for row = 0, Grid.ROWS - 1 do
                 for lc = 0, Grid.STRIP_W - 1 do
-                    if Grid.is_solid(Grid.cell(a.def, origin + lc, row)) then
+                    local is_exit = k == exit_strip and lc == exit_col and row == exit_row
+                    if not is_exit and Grid.is_solid(Grid.cell(a.def, origin + lc, row)) then
                         local x, y = Level.world(k, lc, row)
                         spawn_grid_entity(ENT_TYPE.FLOOR_GENERIC, x, y, LAYER.FRONT)
                         placed = placed + 1
@@ -104,7 +131,7 @@ set_callback(function()
                 end
             end
         end
-        dbgf("built %s: %d strips, %d tiles", a.def.name, a.strips, placed)
+        Crumb(string.format("placed %d tiles in %d strips", placed, a.strips))
     end)
 end, ON.POST_LEVEL_GENERATION)
 

@@ -28,8 +28,11 @@ local MODULES = {
     "src.game",
 }
 
+Crumb("Super Spelunky Bros " .. meta.version .. " loading from " .. PackRootPath())
 for _, path in ipairs(MODULES) do
+    Crumb("require " .. path)
     SafeCall("main/require " .. path, require, path)
 end
+Crumb("script loaded")
 
 dbg("loaded " .. meta.version .. " from " .. PackRootPath())

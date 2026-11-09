@@ -125,4 +125,28 @@ function PackFileExists(name)
     return ok and found == true
 end
 
+-- ------------------------------------------------------------- breadcrumbs
+--
+-- `ssb_boot.log` in the pack folder: one line per step of loading the script and
+-- of loading a level, written and FLUSHED as each step starts. Always on. It is
+-- for the failure that leaves nothing else behind: the game dying with no Lua
+-- error. The last line in the file is the step that did not finish.
+-- (Modded-Online's boot trace, for the same reason.)
+
+local crumbs = nil
+pcall(function()
+    crumbs = io.open(PackPath("ssb_boot.log"), "w")
+end)
+
+--- @param step string
+function Crumb(step)
+    if crumbs == nil then
+        return
+    end
+    pcall(function()
+        crumbs:write(tostring(step) .. "\n")
+        crumbs:flush()
+    end)
+end
+
 return SSB

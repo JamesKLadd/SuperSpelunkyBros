@@ -178,6 +178,7 @@ end
 
 --- Install one entity hook, tolerating a build that does not have it.
 local function hook(p, name, fn)
+    Crumb("hook " .. name)
     local ok, err = pcall(function()
         p[name](p, fn)
     end)

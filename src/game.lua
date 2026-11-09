@@ -19,6 +19,7 @@ local Game = {}
 SSB.Game = Game
 
 local overlay = false
+local first_frame = false -- breadcrumb the first driven frame of each level
 
 --- The hero entity, if the one we took over at level start is still the player.
 local function hero()
@@ -53,10 +54,18 @@ set_callback(function()
             errorf("level start: there is no player 1")
             return
         end
+        local x0, y0 = get_position(p.uid)
+        Crumb(string.format("level start: player uid %s at %.2f, %.2f state %s",
+            tostring(p.uid), x0, y0, tostring(p.state)))
+        Crumb("hero texture")
         local dressed = Assets.dress_hero(p)
+        Crumb(dressed)
         Hero.start(p)
+        Crumb("hooks: " .. Hero.hook_report())
+        Crumb("camera")
         Camera.start(p)
         set_time_ghost_enabled(false) -- these levels have their own clock, later
+        first_frame = true
         overlay = Trace.flagged()
         local x, y = get_position(p.uid)
         Trace.open({
@@ -68,6 +77,7 @@ set_callback(function()
             dressed,
             "units: tiles and tiles/frame. state is CHAR_STATE, raw is the INPUTS bitmask.",
         }, Hero.TRACE_COLUMNS)
+        Crumb("level start done")
     end)
 end, ON.LEVEL)
 
@@ -91,6 +101,9 @@ set_callback(function()
         if p == nil then
             return
         end
+        if first_frame then
+            Crumb("first frame: pre_update")
+        end
         if Level.check_fell_out(p) then
             return
         end
@@ -109,8 +122,15 @@ set_callback(function()
         if p == nil then
             return
         end
+        if first_frame then
+            Crumb("first frame: engine update finished, post_update")
+        end
         Camera.update(p)
         Hero.post_update(p)
+        if first_frame then
+            first_frame = false
+            Crumb("first frame done: running")
+        end
     end)
 end, ON.POST_UPDATE)
 

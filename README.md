@@ -22,7 +22,8 @@ sound or HUD yet. Nothing here has been run in the game yet: see the checklist.
    ```
 
    It writes `res/hero.png` and `Data/Levels/ssb_blank_8x*.lvl` into the pack.
-   Without this step the level cannot load.
+   Without this step the level cannot load. Run it again after every update
+   of the mod: the generated files change with it.
 3. Enable the pack in Playlunky and accept the unsafe-mode warning (the mod
    reads a flag file and writes a trace file, nothing else).
 4. Start a run from the camp. The first level is the test room.
@@ -49,6 +50,13 @@ Create an empty file named `ssb_trace.on` in the pack folder, next to
 Delete the file to turn both off. No restart needed either way.
 
 When something looks wrong, send `ssb_trace.log` and the checklist item.
+
+### If the game crashes
+
+`ssb_boot.log` in the pack folder is always written, no flag needed: one line
+per step of loading the script and of loading a level, flushed as each step
+starts. After a crash, the last line is the step that did not finish. Send that
+file (it is overwritten the next time the game starts).
 
 ## Test checklist: milestone 1
 

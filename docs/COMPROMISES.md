@@ -32,7 +32,13 @@ rows 1 to 14 on screen. The numbers assume a 16:9 window; an ultrawide window
 shows more columns than the 28-column overlap allows for.
 
 **Tiles are placed from Lua, not authored in `.lvl` files.** The `.lvl` files
-are blank rooms plus the entrance door.
+are blank rooms plus an entrance and an exit door.
+
+**Every level has a vanilla exit door** at the far end of its last strip,
+because the engine expects one. In the test room it is reachable and leads to
+the next level, which is the test room again. Real levels will end at their own
+goal; what to do with the door then (wall it in, or use it as the way out after
+the goal) is open.
 
 ## Movement
 

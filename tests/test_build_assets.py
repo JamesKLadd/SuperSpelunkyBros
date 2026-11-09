@@ -76,18 +76,39 @@ def test_the_build_is_deterministic(tmp_path):
     assert a.read_bytes() == b.read_bytes()
 
 
+ROOM = r"^\\\.setroom(\d+)_(\d+)\n((?:[0Ee]{10}\n){8})"
+
+
+def rooms(text):
+    """{(room_row, room_col): [8 strings of 10 cells]} from a blank level file."""
+    return {(int(y), int(x)): body.split("\n")[:8] for y, x, body in re.findall(ROOM, text, flags=re.M)}
+
+
 @pytest.mark.parametrize("height", range(2, 15, 2))
 def test_blank_levels(tmp_path, height):
     build_assets.build_levels(tmp_path)
     text = (tmp_path / f"ssb_blank_8x{height}.lvl").read_text(encoding="utf-8")
-    assert f"\\-size 8 {height}" in text
-    assert "\\?empty 0" in text and "\\?entrance 9" in text
-    templates = re.findall(r"^\\\.setroom(\d+)_(\d+)\n((?:[0-9]{10}\n){8})", text, flags=re.M)
-    assert len(templates) == 8 * height, "one 10 x 8 room per cell of the level"
-    assert {(int(y), int(x)) for y, x, _ in templates} == {(y, x) for y in range(height) for x in range(8)}
-    cells = "".join(rows for _, _, rows in templates)
-    assert cells.count("9") == 1, "exactly one entrance"
-    assert set(cells) <= set("09\n")
+    assert re.search(rf"^\\-size\s+8 {height}$", text, flags=re.M)
+    for code, char in (("empty", "0"), ("floor", "1"), ("entrance", "E"), ("exit", "e")):
+        assert re.search(rf"^\\\?{code}\s+{char}$", text, flags=re.M), code
+    found = rooms(text)
+    assert set(found) == {(y, x) for y in range(height) for x in range(8)}, "one 10 x 8 room per cell"
+    cells = "".join("".join(r) for r in found.values())
+    assert cells.count("E") == 1 and cells.count("e") == 1, "exactly one entrance and one exit"
+
+
+def test_blank_levels_switch_off_what_a_replaced_level_file_leaves_undefined(tmp_path):
+    """Our file replaces the game's level files, so nothing else supplies these.
+
+    The first build had only `size` and the game died while generating the level.
+    The list is the one a known-working CustomLevels level file carries.
+    """
+    build_assets.build_levels(tmp_path)
+    text = (tmp_path / "ssb_blank_8x4.lvl").read_text(encoding="utf-8")
+    for name in ("back_room_chance", "floor_side_spread_chance", "floor_bottom_spread_chance",
+                 "idol_room_chance", "altar_room_chance", "machine_bigroom_chance",
+                 "max_liquid_particles", "mount_chance"):
+        assert re.search(rf"^\\-{name}\s+0$", text, flags=re.M), name
 
 
 def test_the_entrance_is_at_the_level_start(tmp_path):
@@ -97,9 +118,19 @@ def test_the_entrance_is_at_the_level_start(tmp_path):
     row = int(re.search(r"Grid\.START_ROW = (\d+)", src).group(1))
     assert (build_assets.START_COL, build_assets.START_ROW) == (col, row)
     build_assets.build_levels(tmp_path)
-    text = (tmp_path / "ssb_blank_8x4.lvl").read_text(encoding="utf-8")
-    room = re.search(rf"\\\.setroom{row // 8}_{col // 10}\n((?:[0-9]{{10}}\n){{8}})", text).group(1).split("\n")
-    assert room[row % 8][col % 10] == "9"
+    found = rooms((tmp_path / "ssb_blank_8x4.lvl").read_text(encoding="utf-8"))
+    assert found[(row // 8, col // 10)][row % 8][col % 10] == "E"
+
+
+@pytest.mark.parametrize("height", (2, 4, 8))
+def test_the_exit_is_where_level_lua_keeps_clear(tmp_path, height):
+    """Level.exit_cell(): last strip, local column 78, the row the hero walks on."""
+    src = (PACK / "src" / "level.lua").read_text(encoding="utf-8")
+    assert "return Level.active.strips - 1, Grid.STRIP_W - 2, Grid.START_ROW" in src
+    build_assets.build_levels(tmp_path)
+    found = rooms((tmp_path / f"ssb_blank_8x{height}.lvl").read_text(encoding="utf-8"))
+    row = (height // 2 - 1) * 16 + 13
+    assert found[(row // 8, 78 // 10)][row % 8][78 % 10] == "e"
 
 
 def test_level_lua_asks_for_a_file_this_script_writes(tmp_path):

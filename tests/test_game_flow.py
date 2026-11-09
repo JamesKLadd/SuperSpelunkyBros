@@ -72,6 +72,38 @@ def test_the_level_is_built_in_every_strip(game):
     assert game.eval("Stub.solid(SSB.Level.world(0, 60, 11))"), "the low ceiling is there"
 
 
+def test_no_tile_is_placed_on_the_exit_door(pack):
+    """The blank level has its exit at the far end of the last strip."""
+    rt = boot(pack)
+    rt.execute("""
+        SSB.Level.defs[1] = SSB.Grid.new(100):finish({ name = "short" })  -- ends before the strip does
+        Stub.start_level()
+    """)
+    assert rt.eval("SSB.Level.active.strips") == 2
+    assert not rt.eval("Stub.solid(SSB.Level.world(1, 78, 13))"), "the door's cell is left clear"
+    assert rt.eval("Stub.solid(SSB.Level.world(1, 77, 13))"), "past the end of the design is solid"
+    assert rt.eval("Stub.solid(SSB.Level.world(1, 78, 14))"), "with ground under the door"
+
+
+def test_breadcrumbs_name_every_step_of_a_level_load(pack):
+    rt = boot(pack)
+    rt.execute("Stub.fire(ON.PRE_LEVEL_GENERATION); Stub.start_level()")
+    rt.execute("Stub.fire(ON.PRE_LEVEL_GENERATION); Stub.fire(ON.POST_ROOM_GENERATION)")
+    step(rt, RIGHT, 3)
+    lines = (pack / "ssb_boot.log").read_text().splitlines()
+    wanted = ["require src.game", "script loaded", "pre_load_level_files: screen=12",
+              "loading test_room as ssb_blank_8x4.lvl", "post_level_generation: placing tiles",
+              "placed ", "level start: player uid", "hook set_pre_fall", "camera",
+              "level start done", "first frame: pre_update", "first frame done: running"]
+    position = 0
+    for want in wanted:
+        hits = [i for i, line in enumerate(lines) if i >= position and want in line]
+        assert hits, f"no breadcrumb containing {want!r} after line {position}: {lines}"
+        position = hits[0]
+    assert sum("first frame done" in l for l in lines) == 1, "once per level, not once per frame"
+    assert any("pre_level_generation" in l for l in lines)
+
+
 def test_the_hero_is_set_up(game):
     p = player(game)
     assert p.inventory.bombs == 0
